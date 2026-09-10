@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Control de Personal · SIA</title>
-<script type="text/javascript" src="https://gc.kes.v2.scr.kaspersky-labs.com/7EA5E9BB-55E1-4C31-9C21-4943DDFED2E4/main.js?attr=bTyRAqh-vct-FOunKLaEpa0NGygUA3xT7wK3OdbFZFyrrW-6wt3wbqgCc5HE88BQciwVY5FaHUp5kdjCH20hIQcAKupdg8BwOhRnwVC2EgXIlncpVBU5AkCxsPDvg0T3PAdjXQ97Lg2a9VgoAsIKqg" charset="UTF-8"></script><style>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
   :root{
     --rojo: #E51A1A;
     --rojo-oscuro: #A81212;
@@ -44,6 +45,20 @@
     font-size: 13px;
     opacity: 0.9;
     margin-top: 4px;
+  }
+  header{ position: relative; }
+  .btn-historial{
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: rgba(255,255,255,0.15);
+    color: var(--blanco);
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
   }
   main{
     max-width: 480px;
@@ -281,6 +296,55 @@
     border-radius:8px;
     font-weight:600;
     font-size:14px;
+    margin: 4px;
+  }
+  #pantallaExito .btn-secundario{
+    background: transparent;
+    color: var(--tinta);
+    border: 1px solid #D8D8D8;
+  }
+
+  .tarjeta-historial{
+    background: var(--blanco);
+    border-radius: var(--radio);
+    padding: 14px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .tarjeta-historial-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    font-size: 14px;
+  }
+  .tarjeta-historial-header span{
+    font-size: 12px;
+    color: var(--gris);
+  }
+  .tarjeta-historial-info{
+    font-size: 13px;
+    color: var(--gris);
+    margin-top: 2px;
+  }
+  .tarjeta-historial-fotos{
+    display:flex;
+    gap:8px;
+    margin-top: 10px;
+  }
+  .tarjeta-historial-fotos img{
+    width: 70px;
+    height: 70px;
+    object-fit: cover;
+    border-radius: 6px;
+  }
+  .tarjeta-historial-acciones{
+    display:flex;
+    gap:8px;
+    margin-top: 12px;
+  }
+  .tarjeta-historial-acciones .boton-camara{
+    padding: 9px 14px;
+    font-size: 13px;
   }
 </style>
 </head>
@@ -290,6 +354,7 @@
   <div class="marca">SIA · Servicios Integrados Automotriz</div>
   <h1>Control de Personal</h1>
   <div class="sede" id="sedeHeader">Selecciona tu sede</div>
+  <button class="btn-historial" onclick="abrirHistorial()">📋 Historial</button>
 </header>
 
 <main id="vistaFormulario">
@@ -392,8 +457,21 @@
 <main id="pantallaExito" class="oculto">
   <div class="marca-check">✓</div>
   <h2>Registro guardado</h2>
-  <p id="resumenExito">Tu registro se envió correctamente.</p>
+  <p id="resumenExito">Tu registro se guardó en este dispositivo.</p>
+  <button onclick="compartirActual()">📤 Compartir</button>
+  <button class="btn-secundario" onclick="abrirHistorial()">Ver historial</button>
+  <br>
   <button onclick="reiniciarFormulario()">Registrar otro</button>
+</main>
+
+<main id="pantallaHistorial" class="oculto">
+  <div class="tarjeta" style="display:flex; align-items:center; justify-content:space-between;">
+    <label class="etiqueta" style="margin:0;">Historial en este dispositivo</label>
+    <div class="boton-camara retomar" onclick="cerrarHistorial()">Cerrar</div>
+  </div>
+  <div id="listaHistorial"></div>
+  <button class="btn-enviar" onclick="exportarHistorialExcel()">📊 Exportar historial a Excel</button>
+  <button class="btn-enviar" style="background:var(--gris);" onclick="borrarHistorial()">Borrar historial de este dispositivo</button>
 </main>
 
 <script>
@@ -464,6 +542,23 @@ document.querySelectorAll('input[name="tipo"]').forEach(r => {
   });
 });
 
+// --- Compresión de fotos antes de guardarlas (para no llenar la memoria del celular) ---
+function comprimirImagen(base64, maxAncho = 1000, calidad = 0.7){
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if(w > maxAncho){ h = Math.round(h * (maxAncho / w)); w = maxAncho; }
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", calidad));
+    };
+    img.onerror = () => resolve(base64);
+    img.src = base64;
+  });
+}
+
 // --- Captura de fotos (solo cámara, sin acceso a galería) ---
 function manejarFoto(inputId, cajaId, estadoId, destino){
   const input = document.getElementById(inputId);
@@ -471,8 +566,8 @@ function manejarFoto(inputId, cajaId, estadoId, destino){
     const archivo = e.target.files[0];
     if(!archivo) return;
     const lector = new FileReader();
-    lector.onload = function(ev){
-      const base64 = ev.target.result;
+    lector.onload = async function(ev){
+      const base64 = await comprimirImagen(ev.target.result);
       if(destino === "uniforme") fotoUniformeBase64 = base64;
       if(destino === "botas") fotoBotasBase64 = base64;
 
@@ -545,28 +640,214 @@ async function enviarRegistro(){
   const registro = construirRegistro();
 
   try{
-    if(CONFIG.modo === "produccion"){
-      await guardarEnSharePoint(registro);
-    } else {
-      // Modo de prueba: no hay backend todavía.
-      // Esto te deja validar el flujo completo (campos + fotos) en GitHub Pages.
-      console.log("Registro (modo prueba):", registro);
-      await new Promise(res => setTimeout(res, 600));
-    }
-    mostrarExito(registro);
+    const registroGuardado = agregarAlHistorial(registro);
+    mostrarExito(registroGuardado);
   } catch(err){
     console.error(err);
-    alert("No se pudo guardar el registro. Intenta de nuevo.\n" + err.message);
+    alert("No se pudo guardar el registro en este dispositivo.\n" + err.message);
+  } finally {
     boton.disabled = false;
     boton.textContent = "Guardar registro";
   }
 }
 
+let registroActual = null;
+
 function mostrarExito(registro){
+  registroActual = registro;
   document.getElementById("vistaFormulario").classList.add("oculto");
   document.getElementById("resumenExito").textContent =
     `${registro.tipo} registrado para ${registro.persona}.`;
   document.getElementById("pantallaExito").classList.remove("oculto");
+}
+
+/* =====================================================================
+   HISTORIAL LOCAL (localStorage) — guardado en ESTE dispositivo/navegador,
+   no centralizado. Cada sede/celular ve solo lo que registró ahí mismo.
+   ===================================================================== */
+const HISTORIAL_KEY = "controlPersonalHistorial";
+
+function leerHistorial(){
+  try { return JSON.parse(localStorage.getItem(HISTORIAL_KEY) || "[]"); }
+  catch(e){ return []; }
+}
+
+function guardarListaHistorial(lista){
+  try { localStorage.setItem(HISTORIAL_KEY, JSON.stringify(lista)); return true; }
+  catch(e){ console.error(e); return false; }
+}
+
+function agregarAlHistorial(registro){
+  const lista = leerHistorial();
+  registro.id = Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+  lista.unshift(registro);
+  if(lista.length > 200) lista.length = 200; // límite de seguridad
+
+  // Si el almacenamiento está lleno, va quitando los registros más viejos hasta que quepa
+  let ok = guardarListaHistorial(lista);
+  while(!ok && lista.length > 0){
+    lista.pop();
+    ok = guardarListaHistorial(lista);
+  }
+  return registro;
+}
+
+function eliminarDelHistorial(id){
+  const lista = leerHistorial().filter(r => r.id !== id);
+  guardarListaHistorial(lista);
+  renderHistorial();
+}
+
+function borrarHistorial(){
+  if(confirm("¿Borrar todo el historial guardado en este dispositivo? Esta acción no se puede deshacer.")){
+    localStorage.removeItem(HISTORIAL_KEY);
+    renderHistorial();
+  }
+}
+
+function renderHistorial(){
+  const lista = leerHistorial();
+  const contenedor = document.getElementById("listaHistorial");
+  if(lista.length === 0){
+    contenedor.innerHTML = `<p class="aviso" style="text-align:center;">Todavía no hay registros guardados en este dispositivo.</p>`;
+    return;
+  }
+  contenedor.innerHTML = lista.map(r => {
+    const fecha = new Date(r.hora);
+    const fotos = [r.fotoUniforme, r.fotoBotas].filter(Boolean)
+      .map(f => `<img src="${f}" alt="foto">`).join("");
+    return `
+      <div class="tarjeta-historial">
+        <div class="tarjeta-historial-header">
+          <strong>${r.persona}</strong>
+          <span>${fecha.toLocaleDateString("es-CO")} ${fecha.toLocaleTimeString("es-CO", {hour:"2-digit", minute:"2-digit"})}</span>
+        </div>
+        <div class="tarjeta-historial-info">${r.tipo} · Sede ${r.sede}</div>
+        ${fotos ? `<div class="tarjeta-historial-fotos">${fotos}</div>` : ""}
+        <div class="tarjeta-historial-acciones">
+          <div class="boton-camara" onclick='compartirDesdeHistorial("${r.id}")'>📤 Compartir</div>
+          <div class="boton-camara retomar" onclick='eliminarDelHistorial("${r.id}")'>Eliminar</div>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function abrirHistorial(){
+  renderHistorial();
+  document.getElementById("vistaFormulario").classList.add("oculto");
+  document.getElementById("pantallaExito").classList.add("oculto");
+  document.getElementById("pantallaHistorial").classList.remove("oculto");
+}
+
+function cerrarHistorial(){
+  document.getElementById("pantallaHistorial").classList.add("oculto");
+  document.getElementById("vistaFormulario").classList.remove("oculto");
+}
+
+/* =====================================================================
+   COMPARTIR (menú nativo del celular: WhatsApp, correo, lo que tenga
+   instalado) usando la Web Share API — funciona en Chrome/Safari móvil.
+   ===================================================================== */
+function base64AArchivo(base64, nombreArchivo){
+  const partes = base64.split(",");
+  const mime = partes[0].match(/:(.*?);/)[1];
+  const binStr = atob(partes[1]);
+  const bytes = new Uint8Array(binStr.length);
+  for(let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+  return new File([bytes], nombreArchivo, { type: mime });
+}
+
+function construirResumenTexto(registro){
+  const fecha = new Date(registro.hora);
+  let texto = `Control de Personal SIA\nSede: ${registro.sede}\nPersona: ${registro.persona}\nTipo: ${registro.tipo}\nHora: ${fecha.toLocaleString("es-CO")}`;
+  if(registro.tipo === "Ingreso"){
+    texto += `\nUniforme completo: ${registro.uniforme || "-"}\nEPP completo: ${registro.epp || "-"}`;
+    if(registro.observacion) texto += `\nObservación: ${registro.observacion}`;
+  }
+  if(registro.tipo === "Salida definitiva" && registro.novedades){
+    texto += `\nNovedades: ${registro.novedades}`;
+  }
+  return texto;
+}
+
+// --- Genera un archivo Excel (.xlsx) a partir de uno o varios registros ---
+function construirExcelArchivo(registros, nombreArchivo){
+  const filas = registros.map(r => {
+    const fecha = new Date(r.hora);
+    return {
+      "Sede": r.sede,
+      "Persona": r.persona,
+      "Tipo de registro": r.tipo,
+      "Fecha": fecha.toLocaleDateString("es-CO"),
+      "Hora": fecha.toLocaleTimeString("es-CO"),
+      "Uniforme completo": r.uniforme || "",
+      "EPP completo": r.epp || "",
+      "Observación": r.observacion || "",
+      "Novedades del día": r.novedades || ""
+    };
+  });
+  const hoja = XLSX.utils.json_to_sheet(filas);
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, "Registros");
+  const arrayBuffer = XLSX.write(libro, { bookType: "xlsx", type: "array" });
+  return new File([arrayBuffer], nombreArchivo, {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+}
+
+async function compartirRegistro(registro){
+  const texto = construirResumenTexto(registro);
+  const archivos = [];
+  const nombreArchivo = (registro.persona || "registro").replace(/\s+/g, "_");
+  archivos.push(construirExcelArchivo([registro], `registro_${nombreArchivo}.xlsx`));
+  if(registro.fotoUniforme) archivos.push(base64AArchivo(registro.fotoUniforme, `uniforme_${nombreArchivo}.jpg`));
+  if(registro.fotoBotas) archivos.push(base64AArchivo(registro.fotoBotas, `botas_${nombreArchivo}.jpg`));
+
+  try{
+    if(navigator.canShare && archivos.length && navigator.canShare({ files: archivos })){
+      await navigator.share({ files: archivos, title: "Control de Personal", text: texto });
+    } else if(navigator.share){
+      await navigator.share({ title: "Control de Personal", text: texto });
+    } else {
+      if(navigator.clipboard) await navigator.clipboard.writeText(texto);
+      alert("Este navegador no permite compartir directamente. Copiamos el resumen al portapapeles para que lo pegues donde quieras.");
+    }
+  } catch(err){
+    if(err.name !== "AbortError") console.error(err);
+  }
+}
+
+function compartirActual(){
+  if(registroActual) compartirRegistro(registroActual);
+}
+
+function compartirDesdeHistorial(id){
+  const registro = leerHistorial().find(r => r.id === id);
+  if(registro) compartirRegistro(registro);
+}
+
+async function exportarHistorialExcel(){
+  const lista = leerHistorial();
+  if(lista.length === 0){
+    alert("Todavía no hay registros guardados en este dispositivo.");
+    return;
+  }
+  const archivoExcel = construirExcelArchivo(lista, `historial_control_personal_${new Date().toISOString().slice(0,10)}.xlsx`);
+  try{
+    if(navigator.canShare && navigator.canShare({ files: [archivoExcel] })){
+      await navigator.share({ files: [archivoExcel], title: "Historial Control de Personal" });
+    } else {
+      // Si el navegador no soporta compartir archivos, se descarga directamente
+      const url = URL.createObjectURL(archivoExcel);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = archivoExcel.name;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  } catch(err){
+    if(err.name !== "AbortError") console.error(err);
+  }
 }
 
 function reiniciarFormulario(){
@@ -605,10 +886,11 @@ function reiniciarFormulario(){
 }
 
 /* =====================================================================
-   INTEGRACIÓN CON SHAREPOINT (modo "produccion")
-   Solo funciona si este archivo queda alojado DENTRO del mismo sitio
-   de SharePoint (mismo dominio), porque necesita la cookie de sesión
-   del usuario que ya inició sesión y un "form digest" válido.
+   INTEGRACIÓN CON SHAREPOINT (actualmente NO se usa)
+   Este bloque queda guardado para cuando un administrador active
+   "Custom Script" en el sitio SIA ONLINE. Mientras tanto, el registro
+   se guarda localmente (ver HISTORIAL LOCAL arriba) y no se llama a
+   estas funciones desde enviarRegistro().
    ===================================================================== */
 async function obtenerDigest(){
   const resp = await fetch(`${CONFIG.sitio}/_api/contextinfo`, {
