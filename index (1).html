@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Control de Personal · SIA</title>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script>
+  // Aviso visible en pantalla si algo falla (útil en iPhone, donde no hay consola a la mano)
+  function mostrarErrorEnPantalla(mensaje){
+    let banner = document.getElementById("bannerError");
+    if(!banner){
+      banner = document.createElement("div");
+      banner.id = "bannerError";
+      banner.style.cssText = "position:fixed;bottom:0;left:0;right:0;background:#B00020;color:#fff;padding:14px;font-size:13px;z-index:9999;max-height:40vh;overflow:auto;white-space:pre-wrap;";
+      document.body.appendChild(banner);
+    }
+    banner.textContent = "⚠️ Error: " + mensaje;
+  }
+  window.addEventListener("error", (e) => mostrarErrorEnPantalla(e.message + " (línea " + e.lineno + ")"));
+  window.addEventListener("unhandledrejection", (e) => mostrarErrorEnPantalla(String(e.reason)));
+</script>
+<style>
+  :root{
+    --rojo: #E51A1A;
+    --rojo-oscuro: #A81212;
+    --tinta: #1C1C1C;
+    --gris: #6B6B6B;
+    --gris-claro: #EDEDED;
+    --fondo: #F7F7F7;
+    --blanco: #FFFFFF;
+    --verde: #1F8A3B;
+    --radio: 10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--fondo);
+    color: var(--tinta);
+    padding-bottom: 40px;
+  }
+  header{
+    background: var(--rojo);
+    color: var(--blanco);
+    padding: 18px 20px 22px;
+  }
+  header .marca{
+    font-size: 13px;
+    letter-spacing: 0.4px;
+    opacity: 0.9;
+    margin-bottom: 2px;
+  }
+  header h1{
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  header .sede{
+    font-size: 13px;
+    opacity: 0.9;
+    margin-top: 4px;
+  }
+  header{ position: relative; }
+  .btn-historial{
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: rgba(255,255,255,0.15);
+    color: var(--blanco);
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  main{
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+  .tarjeta{
+    background: var(--blanco);
+    border-radius: var(--radio);
+    padding: 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  label.etiqueta{
+    display:block;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--tinta);
+  }
+  input[type="text"], textarea{
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #D8D8D8;
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: inherit;
+    background: var(--blanco);
+  }
+  textarea{ min-height: 80px; resize: vertical; }
+  input[type="text"]:focus, textarea:focus{
+    outline: 2px solid var(--rojo);
+    outline-offset: 1px;
+    border-color: var(--rojo);
+  }
+  select.select-sede{
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #D8D8D8;
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: inherit;
+    background-color: var(--blanco);
+    color: var(--tinta);
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='8' viewBox='0 0 14 8'><path d='M1 1l6 6 6-6' stroke='%236B6B6B' stroke-width='2' fill='none' fill-rule='evenodd'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+  }
+  select.select-sede:focus{
+    outline: 2px solid var(--rojo);
+    outline-offset: 1px;
+    border-color: var(--rojo);
+  }
+
+  .grupo-tipo{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .opcion-tipo{
+    position: relative;
+  }
+  .opcion-tipo input{
+    position:absolute;
+    opacity:0;
+    width:100%;
+    height:100%;
+    margin:0;
+    cursor:pointer;
+  }
+  .opcion-tipo span{
+    display:block;
+    text-align:center;
+    padding: 14px 8px;
+    border: 1.5px solid #D8D8D8;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--gris);
+    line-height:1.25;
+  }
+  .opcion-tipo input:checked + span{
+    border-color: var(--rojo);
+    background: #FDEDED;
+    color: var(--rojo-oscuro);
+  }
+
+  .hora-auto{
+    display:flex;
+    align-items:baseline;
+    gap: 10px;
+    background: var(--gris-claro);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .hora-auto .valor{
+    font-size: 20px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .hora-auto .fecha{
+    font-size: 13px;
+    color: var(--gris);
+  }
+
+  .si-no{
+    display:flex;
+    gap: 10px;
+  }
+  .si-no label{
+    flex:1;
+    position:relative;
+  }
+  .si-no input{
+    position:absolute;
+    opacity:0;
+    width:100%;
+    height:100%;
+    margin:0;
+    cursor:pointer;
+  }
+  .si-no span{
+    display:block;
+    text-align:center;
+    padding: 11px;
+    border: 1.5px solid #D8D8D8;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--gris);
+  }
+  .si-no input:checked + span{
+    border-color: var(--rojo);
+    background: #FDEDED;
+    color: var(--rojo-oscuro);
+  }
+
+  .foto-bloque{ margin-top: 6px; }
+  .foto-bloque + .foto-bloque{ margin-top: 16px; }
+  .foto-caja{
+    border: 1.5px dashed #C9C9C9;
+    border-radius: 10px;
+    padding: 14px;
+    text-align:center;
+    background: #FAFAFA;
+  }
+  .foto-caja.lista{
+    border-style: solid;
+    border-color: var(--verde);
+    background: #F0FAF2;
+    padding: 8px;
+  }
+  .foto-caja img{
+    max-width:100%;
+    max-height: 220px;
+    border-radius: 6px;
+    display:block;
+    margin: 0 auto 8px;
+  }
+  .boton-camara{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    background: var(--tinta);
+    color: var(--blanco);
+    border:none;
+    border-radius: 8px;
+    padding: 11px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor:pointer;
+  }
+  .boton-camara.retomar{
+    background: transparent;
+    color: var(--gris);
+    border: 1px solid #D8D8D8;
+  }
+  .boton-camara.listo{
+    background: var(--verde);
+  }
+  .boton-camara.ocupado{
+    opacity: 0.6;
+    pointer-events: none;
+  }
+  input[type="file"]{ display:none; }
+
+  .estado-foto{
+    font-size: 13px;
+    color: var(--gris);
+    margin-top: 6px;
+  }
+  .estado-foto.ok{ color: var(--verde); font-weight:600; }
+
+  .btn-enviar{
+    width:100%;
+    padding: 16px;
+    background: var(--rojo);
+    color: var(--blanco);
+    border:none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor:pointer;
+    margin-top: 4px;
+  }
+  .btn-enviar:disabled{
+    background: #E7A7A7;
+    cursor:not-allowed;
+  }
+  .btn-enviar:active:not(:disabled){ background: var(--rojo-oscuro); }
+  .btn-enviar.listo{ background: var(--verde); }
+
+  .oculto{ display:none !important; }
+
+  .aviso{
+    font-size: 13px;
+    color: var(--gris);
+    padding: 0 4px;
+    margin: 10px 0 0;
+  }
+
+  #pantallaExito{
+    text-align:center;
+    padding: 60px 24px;
+  }
+  #pantallaExito .marca-check{
+    width:64px;height:64px;border-radius:50%;
+    background: var(--verde);
+    color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-size:32px;
+    margin: 0 auto 18px;
+  }
+  #pantallaExito h2{ margin: 0 0 6px; font-size:19px; }
+  #pantallaExito p{ color: var(--gris); font-size:14px; margin: 0 0 24px;}
+  #pantallaExito button{
+    background: var(--tinta);
+    color:#fff;
+    border:none;
+    padding: 12px 22px;
+    border-radius:8px;
+    font-weight:600;
+    font-size:14px;
+    margin: 4px;
+  }
+  #pantallaExito .btn-secundario{
+    background: transparent;
+    color: var(--tinta);
+    border: 1px solid #D8D8D8;
+  }
+
+  .tarjeta-historial{
+    background: var(--blanco);
+    border-radius: var(--radio);
+    padding: 14px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .tarjeta-historial-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    font-size: 14px;
+  }
+  .tarjeta-historial-header span{
+    font-size: 12px;
+    color: var(--gris);
+  }
+  .tarjeta-historial-info{
+    font-size: 13px;
+    color: var(--gris);
+    margin-top: 2px;
+  }
+  .tarjeta-historial-fotos{
+    display:flex;
+    gap:8px;
+    margin-top: 10px;
+  }
+  .tarjeta-historial-fotos img{
+    width: 70px;
+    height: 70px;
+    object-fit: cover;
+    border-radius: 6px;
+  }
+  .tarjeta-historial-acciones{
+    display:flex;
+    gap:8px;
+    margin-top: 12px;
+  }
+  .tarjeta-historial-acciones .boton-camara{
+    padding: 9px 14px;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="marca">SIA · Servicios Integrados Automotriz</div>
+  <h1>Control de Personal</h1>
+  <div class="sede" id="sedeHeader">Selecciona tu sede</div>
+  <button class="btn-historial" onclick="abrirHistorial()">📋 Historial</button>
+</header>
+<div id="versionPagina" style="text-align:center;font-size:11px;color:#9A9A9A;padding:6px 0 0;"></div>
+
+<main id="vistaFormulario">
+
+  <div class="tarjeta">
+    <label class="etiqueta" for="sede">Sede</label>
+    <select class="select-sede" id="sede">
+      <option value="" disabled selected>Selecciona una sede</option>
+    </select>
+  </div>
+
+  <div class="tarjeta">
+    <label class="etiqueta" for="nombre">Nombre completo</label>
+    <input type="text" id="nombre" placeholder="Escribe tu nombre completo" autocomplete="off">
+  </div>
+
+  <div class="tarjeta">
+    <label class="etiqueta">Tipo de registro</label>
+    <div class="grupo-tipo" id="grupoTipo">
+      <label class="opcion-tipo">
+        <input type="radio" name="tipo" value="Ingreso">
+        <span>Ingreso</span>
+      </label>
+      <label class="opcion-tipo">
+        <input type="radio" name="tipo" value="Salida a almuerzo">
+        <span>Salida a<br>almuerzo</span>
+      </label>
+      <label class="opcion-tipo">
+        <input type="radio" name="tipo" value="Regreso de almuerzo">
+        <span>Regreso de<br>almuerzo</span>
+      </label>
+      <label class="opcion-tipo">
+        <input type="radio" name="tipo" value="Salida definitiva">
+        <span>Salida<br>definitiva</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Hora automática: aparece para cualquier tipo seleccionado -->
+  <div class="tarjeta oculto" id="tarjetaHora">
+    <label class="etiqueta" id="etiquetaHora">Hora</label>
+    <div class="hora-auto">
+      <div class="valor" id="horaValor">--:--:--</div>
+      <div class="fecha" id="fechaValor"></div>
+    </div>
+  </div>
+
+  <!-- Campos solo para Ingreso -->
+  <div class="tarjeta oculto" id="bloqueIngreso">
+    <label class="etiqueta">Uniforme completo</label>
+    <div class="si-no">
+      <label><input type="radio" name="uniforme" value="Si"><span>Sí</span></label>
+      <label><input type="radio" name="uniforme" value="No"><span>No</span></label>
+    </div>
+
+    <label class="etiqueta" style="margin-top:16px;">EPP completo</label>
+    <div class="si-no">
+      <label><input type="radio" name="epp" value="Si"><span>Sí</span></label>
+      <label><input type="radio" name="epp" value="No"><span>No</span></label>
+    </div>
+
+    <label class="etiqueta" style="margin-top:16px;">Observación</label>
+    <textarea id="observacion" placeholder="Escribe una observación (opcional)"></textarea>
+  </div>
+
+  <!-- Fotos: solo para Ingreso -->
+  <div class="tarjeta oculto" id="bloqueFotos">
+    <label class="etiqueta">Evidencia fotográfica</label>
+
+    <div class="foto-bloque">
+      <div class="foto-caja" id="cajaUniforme">
+        <div class="boton-camara" onclick="document.getElementById('inputUniforme').click()">📷 Tomar foto del uniforme</div>
+        <input type="file" id="inputUniforme" accept="image/*" capture="environment">
+      </div>
+      <div class="estado-foto" id="estadoUniforme">Sin foto</div>
+    </div>
+
+    <div class="foto-bloque">
+      <div class="foto-caja" id="cajaBotas">
+        <div class="boton-camara" onclick="document.getElementById('inputBotas').click()">📷 Tomar foto de las botas</div>
+        <input type="file" id="inputBotas" accept="image/*" capture="environment">
+      </div>
+      <div class="estado-foto" id="estadoBotas">Sin foto</div>
+    </div>
+
+    <p class="aviso">La cámara se abre directamente; no se puede seleccionar una foto de la galería.</p>
+  </div>
+
+  <!-- Novedades: solo para Salida definitiva -->
+  <div class="tarjeta oculto" id="bloqueNovedades">
+    <label class="etiqueta">Novedades del día</label>
+    <textarea id="novedades" placeholder="Escribe las novedades del día (opcional)"></textarea>
+  </div>
+
+  <button class="btn-enviar oculto" id="btnEnviar" disabled onclick="enviarRegistro()">Guardar registro</button>
+  <p class="aviso oculto" id="avisoIncompleto">Completa el nombre y los campos obligatorios para poder guardar.</p>
+
+</main>
+
+<main id="pantallaExito" class="oculto">
+  <div class="marca-check">✓</div>
+  <h2>Registro guardado</h2>
+  <p id="resumenExito">Tu registro se guardó en este dispositivo.</p>
+  <button onclick="compartirActual()">📤 Compartir</button>
+  <p id="ayudaCompartir" style="font-size:12.5px;color:var(--gris);margin:6px 0 12px;">En el menú que se abre, elige WhatsApp, Correo o cualquier app instalada. El archivo se adjunta solo.</p>
+  <button class="btn-secundario" onclick="abrirHistorial()">Ver historial</button>
+  <br>
+  <button onclick="reiniciarFormulario()">Registrar otro</button>
+</main>
+
+<main id="pantallaHistorial" class="oculto">
+  <div class="tarjeta" style="display:flex; align-items:center; justify-content:space-between;">
+    <label class="etiqueta" style="margin:0;">Historial en este dispositivo</label>
+    <div class="boton-camara retomar" onclick="cerrarHistorial()">Cerrar</div>
+  </div>
+  <div id="listaHistorial"></div>
+  <button class="btn-enviar" id="btnExportar" onclick="exportarHistorial()">📊 Enviar historial completo</button>
+  <button class="btn-enviar" style="background:var(--gris);" onclick="borrarHistorial()">Borrar historial de este dispositivo</button>
+</main>
+
+<script>
+/* =====================================================================
+   CONFIGURACIÓN
+   ===================================================================== */
+const VERSION = "v2026-10-05c";
+const CONFIG = {
+  modo: "produccion", // "prueba" | "produccion"
+  sitio: "https://serviciosiasas.sharepoint.com/sites/SIAONLINE",
+  lista: "Control Personal Yopal - Web",                      // nombre exacto de la lista
+  // Enlace oficial (GitHub Pages). Compartir solo funciona abriendo la página desde aquí:
+  urlOficial: "https://siaonline.github.io/control-personal-multisede/",
+  // Para agregar una sede nueva en el futuro, solo agrega su nombre aquí:
+  sedes: ["Mosquera", "Barranquilla", "Medellín", "Girardota", "Cali", "Bucaramanga", "Montería", "Yopal", "Neiva", "Villavicencio", "Pereira"]
+};
+
+// Si la página se abrió como archivo (desde WhatsApp, Descargas, etc.) y no
+// desde el enlace https, el celular bloquea "Compartir": se muestra un aviso.
+const PAGINA_SEGURA = window.isSecureContext && location.protocol === "https:";
+(function avisoPaginaNoSegura(){
+  if(PAGINA_SEGURA) return;
+  const aviso = document.createElement("div");
+  aviso.style.cssText = "background:#FFF4D6;border-bottom:1px solid #E8C766;color:#5A4300;padding:14px 16px;font-size:14px;line-height:1.4;";
+  aviso.innerHTML = `
+    <strong>Estás abriendo una copia del archivo, no la página oficial.</strong><br>
+    Así no se puede compartir el registro ni se guarda el historial.
+    <a href="${CONFIG.urlOficial}" style="display:block;margin-top:10px;background:#E51A1A;color:#fff;text-align:center;padding:12px;border-radius:8px;font-weight:700;text-decoration:none;">Abrir la página oficial</a>`;
+  document.body.insertBefore(aviso, document.body.firstChild);
+})();
+
+document.getElementById("versionPagina").textContent = "Versión " + VERSION;
+
+// Llena el desplegable de sede a partir de CONFIG.sedes
+(function poblarSedes(){
+  const select = document.getElementById("sede");
+  CONFIG.sedes.forEach(nombreSede => {
+    const opcion = document.createElement("option");
+    opcion.value = nombreSede;
+    opcion.textContent = nombreSede;
+    select.appendChild(opcion);
+  });
+})();
+
+document.getElementById("sede").addEventListener("change", (e) => {
+  document.getElementById("sedeHeader").textContent = "Sede " + e.target.value;
+  validarFormulario();
+});
+
+let fotoUniformeBase64 = null;
+let fotoBotasBase64 = null;
+
+// --- Reloj / hora automática por tipo de registro ---
+const etiquetasHora = {
+  "Ingreso": "Hora de ingreso",
+  "Salida a almuerzo": "Hora de salida a almuerzo",
+  "Regreso de almuerzo": "Hora de regreso de almuerzo",
+  "Salida definitiva": "Hora de salida definitiva"
+};
+
+function actualizarReloj(){
+  const ahora = new Date();
+  document.getElementById("horaValor").textContent =
+    ahora.toLocaleTimeString("es-CO", {hour:"2-digit", minute:"2-digit", second:"2-digit"});
+  document.getElementById("fechaValor").textContent =
+    ahora.toLocaleDateString("es-CO", {day:"2-digit", month:"2-digit", year:"numeric"});
+}
+setInterval(actualizarReloj, 1000);
+actualizarReloj();
+
+document.querySelectorAll('input[name="tipo"]').forEach(r => {
+  r.addEventListener("change", () => {
+    const tipo = r.value;
+    document.getElementById("tarjetaHora").classList.remove("oculto");
+    document.getElementById("etiquetaHora").textContent = etiquetasHora[tipo];
+
+    document.getElementById("bloqueIngreso").classList.toggle("oculto", tipo !== "Ingreso");
+    document.getElementById("bloqueFotos").classList.toggle("oculto", tipo !== "Ingreso");
+    document.getElementById("bloqueNovedades").classList.toggle("oculto", tipo !== "Salida definitiva");
+
+    document.getElementById("btnEnviar").classList.remove("oculto");
+    validarFormulario();
+  });
+});
+
+// --- Compresión de fotos antes de guardarlas (para no llenar la memoria del celular) ---
+function comprimirImagen(base64, maxAncho = 1000, calidad = 0.7){
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if(w > maxAncho){ h = Math.round(h * (maxAncho / w)); w = maxAncho; }
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", calidad));
+    };
+    img.onerror = () => resolve(base64);
+    img.src = base64;
+  });
+}
+
+// --- Captura de fotos (solo cámara, sin acceso a galería) ---
+function manejarFoto(inputId, cajaId, estadoId, destino){
+  const input = document.getElementById(inputId);
+  input.addEventListener("change", (e) => {
+    const archivo = e.target.files[0];
+    if(!archivo) return;
+    const lector = new FileReader();
+    lector.onload = async function(ev){
+      const base64 = await comprimirImagen(ev.target.result);
+      if(destino === "uniforme") fotoUniformeBase64 = base64;
+      if(destino === "botas") fotoBotasBase64 = base64;
+
+      const caja = document.getElementById(cajaId);
+      caja.classList.add("lista");
+      caja.innerHTML = `
+        <img src="${base64}" alt="Foto capturada">
+        <div class="boton-camara retomar" onclick="document.getElementById('${inputId}').click()">Repetir foto</div>
+        <input type="file" id="${inputId}" accept="image/*" capture="environment">
+      `;
+      // Reasignar el listener al nuevo input (el innerHTML anterior se reemplazó)
+      manejarFoto(inputId, cajaId, estadoId, destino);
+
+      document.getElementById(estadoId).textContent = "Foto capturada ✓";
+      document.getElementById(estadoId).classList.add("ok");
+      validarFormulario();
+    };
+    lector.readAsDataURL(archivo);
+  });
+}
+manejarFoto("inputUniforme", "cajaUniforme", "estadoUniforme", "uniforme");
+manejarFoto("inputBotas", "cajaBotas", "estadoBotas", "botas");
+
+// --- Validación mínima antes de habilitar "Guardar" ---
+function tipoSeleccionado(){
+  const r = document.querySelector('input[name="tipo"]:checked');
+  return r ? r.value : null;
+}
+
+function validarFormulario(){
+  const nombre = document.getElementById("nombre").value.trim();
+  const sede = document.getElementById("sede").value;
+  const tipo = tipoSeleccionado();
+  let valido = !!nombre && !!sede && !!tipo;
+
+  if(tipo === "Ingreso"){
+    valido = valido && !!fotoUniformeBase64 && !!fotoBotasBase64;
+  }
+
+  document.getElementById("btnEnviar").disabled = !valido;
+  document.getElementById("avisoIncompleto").classList.toggle("oculto", valido);
+}
+document.getElementById("nombre").addEventListener("input", validarFormulario);
+document.querySelectorAll('input[name="uniforme"], input[name="epp"]').forEach(el =>
+  el.addEventListener("change", validarFormulario)
+);
+
+// --- Armar el registro ---
+function construirRegistro(){
+  const tipo = tipoSeleccionado();
+  return {
+    sede: document.getElementById("sede").value,
+    persona: document.getElementById("nombre").value.trim(),
+    tipo: tipo,
+    hora: new Date().toISOString(),
+    uniforme: tipo === "Ingreso" ? (document.querySelector('input[name="uniforme"]:checked')?.value || "") : "",
+    epp: tipo === "Ingreso" ? (document.querySelector('input[name="epp"]:checked')?.value || "") : "",
+    observacion: tipo === "Ingreso" ? document.getElementById("observacion").value.trim() : "",
+    novedades: tipo === "Salida definitiva" ? document.getElementById("novedades").value.trim() : "",
+    fotoUniforme: tipo === "Ingreso" ? fotoUniformeBase64 : null,
+    fotoBotas: tipo === "Ingreso" ? fotoBotasBase64 : null
+  };
+}
+
+async function enviarRegistro(){
+  const boton = document.getElementById("btnEnviar");
+  boton.disabled = true;
+  boton.textContent = "Guardando...";
+
+  const registro = construirRegistro();
+
+  try{
+    const registroGuardado = agregarAlHistorial(registro);
+    // El archivo se arma AHORA, para que el botón "Compartir" abra el menú
+    // nativo al instante (los navegadores exigen que compartir ocurra justo
+    // después del toque, sin esperas de por medio).
+    boton.textContent = "Preparando archivo...";
+    archivoActual = await prepararArchivoParaCompartir([registroGuardado], nombreBaseRegistro(registroGuardado), false);
+    mostrarExito(registroGuardado);
+  } catch(err){
+    console.error(err);
+    alert("No se pudo guardar el registro en este dispositivo.\n" + err.message);
+  } finally {
+    boton.disabled = false;
+    boton.textContent = "Guardar registro";
+  }
+}
+
+let registroActual = null;
+let archivoActual = null;
+
+function mostrarExito(registro){
+  registroActual = registro;
+  document.getElementById("vistaFormulario").classList.add("oculto");
+  const formato = archivoActual && archivoActual.name.endsWith(".pdf") ? "PDF" : "Excel";
+  document.getElementById("resumenExito").textContent =
+    `${registro.tipo} registrado para ${registro.persona}. Se enviará como archivo ${formato}${registro.fotoUniforme ? " con las fotos incluidas" : ""}.`;
+  document.getElementById("pantallaExito").classList.remove("oculto");
+}
+
+/* =====================================================================
+   HISTORIAL LOCAL (localStorage) — guardado en ESTE dispositivo/navegador,
+   no centralizado. Cada sede/celular ve solo lo que registró ahí mismo.
+   ===================================================================== */
+const HISTORIAL_KEY = "controlPersonalHistorial";
+
+// Archivos ya armados desde el historial, para que el segundo toque comparta al instante
+const archivosPreparados = {};
+let archivoHistorialPreparado = null;
+
+function leerHistorial(){
+  try { return JSON.parse(localStorage.getItem(HISTORIAL_KEY) || "[]"); }
+  catch(e){ return []; }
+}
+
+function guardarListaHistorial(lista){
+  try { localStorage.setItem(HISTORIAL_KEY, JSON.stringify(lista)); return true; }
+  catch(e){ console.error(e); return false; }
+}
+
+function agregarAlHistorial(registro){
+  const lista = leerHistorial();
+  registro.id = Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+  lista.unshift(registro);
+  if(lista.length > 200) lista.length = 200; // límite de seguridad
+
+  // Si el almacenamiento está lleno, va quitando los registros más viejos hasta que quepa
+  let ok = guardarListaHistorial(lista);
+  while(!ok && lista.length > 0){
+    lista.pop();
+    ok = guardarListaHistorial(lista);
+  }
+  archivoHistorialPreparado = null;
+  return registro;
+}
+
+function eliminarDelHistorial(id){
+  const lista = leerHistorial().filter(r => r.id !== id);
+  guardarListaHistorial(lista);
+  delete archivosPreparados[id];
+  archivoHistorialPreparado = null;
+  renderHistorial();
+}
+
+function borrarHistorial(){
+  if(confirm("¿Borrar todo el historial guardado en este dispositivo? Esta acción no se puede deshacer.")){
+    localStorage.removeItem(HISTORIAL_KEY);
+    Object.keys(archivosPreparados).forEach(k => delete archivosPreparados[k]);
+    archivoHistorialPreparado = null;
+    renderHistorial();
+  }
+}
+
+function renderHistorial(){
+  const lista = leerHistorial();
+  const contenedor = document.getElementById("listaHistorial");
+  actualizarBotonExportar();
+  if(lista.length === 0){
+    contenedor.innerHTML = `<p class="aviso" style="text-align:center;">Todavía no hay registros guardados en este dispositivo.</p>`;
+    return;
+  }
+  contenedor.innerHTML = lista.map(r => {
+    const fecha = new Date(r.hora);
+    const fotos = [r.fotoUniforme, r.fotoBotas].filter(Boolean)
+      .map(f => `<img src="${f}" alt="foto">`).join("");
+    const listo = !!archivosPreparados[r.id];
+    return `
+      <div class="tarjeta-historial">
+        <div class="tarjeta-historial-header">
+          <strong>${r.persona}</strong>
+          <span>${fecha.toLocaleDateString("es-CO")} ${fecha.toLocaleTimeString("es-CO", {hour:"2-digit", minute:"2-digit"})}</span>
+        </div>
+        <div class="tarjeta-historial-info">${r.tipo} · Sede ${r.sede}</div>
+        ${fotos ? `<div class="tarjeta-historial-fotos">${fotos}</div>` : ""}
+        <div class="tarjeta-historial-acciones">
+          <div class="boton-camara ${listo ? "listo" : ""}" onclick='compartirDesdeHistorial("${r.id}", this)'>${listo ? "📤 Toca para enviar" : "📤 Compartir"}</div>
+          <div class="boton-camara retomar" onclick='eliminarDelHistorial("${r.id}")'>Eliminar</div>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function abrirHistorial(){
+  renderHistorial();
+  document.getElementById("vistaFormulario").classList.add("oculto");
+  document.getElementById("pantallaExito").classList.add("oculto");
+  document.getElementById("pantallaHistorial").classList.remove("oculto");
+}
+
+function cerrarHistorial(){
+  document.getElementById("pantallaHistorial").classList.add("oculto");
+  document.getElementById("vistaFormulario").classList.remove("oculto");
+}
+
+/* =====================================================================
+   COMPARTIR DIRECTO (menú nativo del celular: WhatsApp, correo, etc.)
+   ---------------------------------------------------------------------
+   Por qué antes obligaba a descargar:
+   1) Chrome en Android NO permite compartir archivos .xlsx con la Web
+      Share API (solo admite imágenes, PDF, CSV, texto, audio y video).
+      En iPhone (Safari) sí se puede compartir el Excel.
+   2) Desde el Historial, el Excel se armaba DESPUÉS del toque; si eso
+      tardaba, el navegador ya no permitía abrir el menú y caía a la
+      descarga.
+   Solución:
+   - Se detecta qué permite el celular: si acepta Excel, se envía Excel
+     (con fotos incrustadas); si no, se envía un PDF con los datos y las
+     fotos, que todos los celulares sí permiten compartir directo.
+   - El archivo siempre queda armado ANTES de abrir el menú. Si el
+     navegador bloquea por demora, el botón queda en verde
+     "Toca para enviar" y el segundo toque abre el menú al instante.
+   - La descarga queda solo como último recurso (navegadores sin menú
+     de compartir, p. ej. un computador).
+   ===================================================================== */
+const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+function puedeCompartirArchivo(archivo){
+  try { return !!(navigator.canShare && navigator.canShare({ files: [archivo] })); }
+  catch(e){ return false; }
+}
+
+// Se revisa una sola vez al cargar qué formatos acepta este celular
+const PUEDE_COMPARTIR_XLSX = puedeCompartirArchivo(new File(["x"], "prueba.xlsx", { type: MIME_XLSX }));
+const PUEDE_COMPARTIR_PDF = puedeCompartirArchivo(new File(["x"], "prueba.pdf", { type: "application/pdf" }));
+
+// Nombre de archivo sin tildes, ñ ni símbolos (Chrome en Android puede rechazarlos)
+function nombreSeguro(texto){
+  return String(texto || "registro")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "registro";
+}
+function nombreBaseRegistro(registro){
+  return "registro_" + nombreSeguro(registro.persona);
+}
+
+// Devuelve el archivo en el formato que este celular sí deja compartir
+async function prepararArchivoParaCompartir(registros, nombreBase, esHistorial){
+  if(PUEDE_COMPARTIR_XLSX){
+    return await construirExcelArchivo(registros, nombreBase + ".xlsx");
+  }
+  if(PUEDE_COMPARTIR_PDF && window.jspdf){
+    return await construirPdfArchivo(registros, nombreBase + ".pdf", esHistorial);
+  }
+  // Sin menú de compartir para archivos (ej. computador): Excel para descargar
+  return await construirExcelArchivo(registros, nombreBase + ".xlsx");
+}
+
+// Abre el menú nativo. Debe llamarse justo en el toque (sin esperas antes).
+// Devuelve: "ok" | "cancelado" | "bloqueado" | "descargado"
+// intento 1: archivo + texto · intento 2: solo el archivo · intento 3: descarga
+async function compartirArchivo(archivo, texto, titulo, intento = 1){
+  if(!PAGINA_SEGURA){
+    alert("Para compartir, abre la página oficial:\n" + CONFIG.urlOficial + "\n\nAhora mismo se está usando una copia del archivo (por ejemplo, abierta desde WhatsApp) y el celular no permite compartir desde ahí.");
+    return "no-segura";
+  }
+  if(intento <= 2 && puedeCompartirArchivo(archivo)){
+    const datos = { files: [archivo] };
+    if(intento === 1){
+      datos.title = titulo || "Control de Personal";
+      if(texto) datos.text = texto;
+    }
+    try{
+      await navigator.share(datos);
+      mostrarDiagnostico("");
+      return "ok";
+    } catch(err){
+      if(err.name === "AbortError") return "cancelado";     // el usuario cerró el menú
+      mostrarDiagnostico(err);
+      console.error(err);
+      return "bloqueado";
+    }
+  }
+  // Último recurso: descarga
+  if(texto && navigator.clipboard){ try{ await navigator.clipboard.writeText(texto); }catch(e){} }
+  descargarArchivoDirecto(archivo);
+  alert("El celular no permitió adjuntar el archivo directamente. Se descargó para enviarlo manualmente.");
+  return "descargado";
+}
+
+// Muestra el error técnico debajo del botón (para poder diagnosticarlo con una captura)
+function mostrarDiagnostico(err){
+  let caja = document.getElementById("diagnostico");
+  if(!caja){
+    caja = document.createElement("p");
+    caja.id = "diagnostico";
+    caja.style.cssText = "font-size:11.5px;color:#B00020;background:#FDEDED;border-radius:8px;padding:8px 10px;margin:10px auto;max-width:440px;text-align:left;word-break:break-word;";
+    document.body.appendChild(caja);
+  }
+  if(!err){ caja.style.display = "none"; return; }
+  caja.style.display = "block";
+  const archivo = archivoActual ? `${archivoActual.name} · ${archivoActual.type} · ${Math.round(archivoActual.size/1024)} KB` : "-";
+  caja.textContent = `Detalle técnico (${VERSION}): ${err.name}: ${err.message} | Archivo: ${archivo} | ${navigator.userAgent}`;
+}
+
+function base64AArchivo(base64, nombreArchivo){
+  const partes = base64.split(",");
+  const mime = partes[0].match(/:(.*?);/)[1];
+  const binStr = atob(partes[1]);
+  const bytes = new Uint8Array(binStr.length);
+  for(let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+  return new File([bytes], nombreArchivo, { type: mime });
+}
+
+function construirResumenTexto(registro){
+  const fecha = new Date(registro.hora);
+  let texto = `Control de Personal SIA\nSede: ${registro.sede}\nPersona: ${registro.persona}\nTipo: ${registro.tipo}\nHora: ${fecha.toLocaleString("es-CO")}`;
+  if(registro.tipo === "Ingreso"){
+    texto += `\nUniforme completo: ${registro.uniforme || "-"}\nEPP completo: ${registro.epp || "-"}`;
+    if(registro.observacion) texto += `\nObservación: ${registro.observacion}`;
+  }
+  if(registro.tipo === "Salida definitiva" && registro.novedades){
+    texto += `\nNovedades: ${registro.novedades}`;
+  }
+  return texto;
+}
+
+// --- Genera un archivo Excel (.xlsx) con las fotos INCRUSTADAS como imágenes ---
+async function construirExcelArchivo(registros, nombreArchivo){
+  const workbook = new ExcelJS.Workbook();
+  const hoja = workbook.addWorksheet("Registros");
+  hoja.columns = [
+    { header: "Sede", key: "sede", width: 14 },
+    { header: "Persona", key: "persona", width: 18 },
+    { header: "Tipo de registro", key: "tipo", width: 20 },
+    { header: "Fecha", key: "fecha", width: 12 },
+    { header: "Hora", key: "hora", width: 12 },
+    { header: "Uniforme completo", key: "uniforme", width: 16 },
+    { header: "EPP completo", key: "epp", width: 14 },
+    { header: "Observación", key: "observacion", width: 24 },
+    { header: "Novedades del día", key: "novedades", width: 24 },
+    { header: "Foto uniforme", key: "fotoUniforme", width: 18 },
+    { header: "Foto botas", key: "fotoBotas", width: 18 }
+  ];
+  hoja.getRow(1).font = { bold: true };
+
+  registros.forEach((r, i) => {
+    const numeroFila = i + 2; // la fila 1 es el encabezado
+    const fecha = new Date(r.hora);
+    hoja.addRow({
+      sede: r.sede,
+      persona: r.persona,
+      tipo: r.tipo,
+      fecha: fecha.toLocaleDateString("es-CO"),
+      hora: fecha.toLocaleTimeString("es-CO"),
+      uniforme: r.uniforme || "",
+      epp: r.epp || "",
+      observacion: r.observacion || "",
+      novedades: r.novedades || ""
+    });
+    hoja.getRow(numeroFila).height = 85;
+
+    if(r.fotoUniforme){
+      const idImg = workbook.addImage({ base64: r.fotoUniforme, extension: "jpeg" });
+      hoja.addImage(idImg, { tl: { col: 9, row: numeroFila - 1 }, ext: { width: 105, height: 105 } });
+    }
+    if(r.fotoBotas){
+      const idImg2 = workbook.addImage({ base64: r.fotoBotas, extension: "jpeg" });
+      hoja.addImage(idImg2, { tl: { col: 10, row: numeroFila - 1 }, ext: { width: 105, height: 105 } });
+    }
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return new File([buffer], nombreArchivo, { type: MIME_XLSX });
+}
+
+// --- Genera un PDF con los datos y las fotos (para celulares que no comparten Excel) ---
+function medirImagen(dataUrl){
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.width, h: img.height });
+    img.onerror = () => resolve({ w: 4, h: 3 });
+    img.src = dataUrl;
+  });
+}
+
+async function construirPdfArchivo(registros, nombreArchivo, esHistorial){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const ANCHO = 210, MARGEN = 14, LIMITE = 282;
+  const ANCHO_ETIQUETA = 42;
+  const CAJA_FOTO = { w: 86, h: 64 };
+  let y = 0;
+
+  function encabezado(){
+    doc.setFillColor(229, 26, 26);
+    doc.rect(0, 0, ANCHO, 22, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(15);
+    doc.text("Control de Personal · SIA", MARGEN, 11);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    doc.text("Servicios Integrados Automotriz · Generado " + new Date().toLocaleString("es-CO"), MARGEN, 17);
+    y = 32;
+  }
+  encabezado();
+
+  for(const r of registros){
+    const fecha = new Date(r.hora);
+    const campos = [
+      ["Sede", r.sede],
+      ["Fecha", fecha.toLocaleDateString("es-CO")],
+      ["Hora", fecha.toLocaleTimeString("es-CO")]
+    ];
+    if(r.tipo === "Ingreso"){
+      campos.push(["Uniforme completo", r.uniforme || "-"], ["EPP completo", r.epp || "-"]);
+      if(r.observacion) campos.push(["Observación", r.observacion]);
+    }
+    if(r.tipo === "Salida definitiva" && r.novedades) campos.push(["Novedades del día", r.novedades]);
+
+    doc.setFontSize(10);
+    const lineasPorCampo = campos.map(([, v]) => doc.splitTextToSize(String(v), ANCHO - MARGEN * 2 - ANCHO_ETIQUETA));
+    const altoTexto = 8 + lineasPorCampo.reduce((s, l) => s + l.length * 5.2, 0);
+    const fotos = [["Uniforme", r.fotoUniforme], ["Botas", r.fotoBotas]].filter(f => f[1]);
+    const altoFotos = fotos.length ? CAJA_FOTO.h + 8 : 0;
+    const altoBloque = altoTexto + altoFotos + 8;
+
+    if(y + altoBloque > LIMITE && y > 32){ doc.addPage(); encabezado(); }
+
+    // Título del registro
+    doc.setTextColor(28, 28, 28);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(12.5);
+    doc.text(`${r.persona} - ${r.tipo}`, MARGEN, y);
+    y += 7;
+
+    // Campos
+    doc.setFontSize(10);
+    campos.forEach(([etiqueta], i) => {
+      doc.setFont("helvetica", "bold"); doc.setTextColor(107, 107, 107);
+      doc.text(etiqueta, MARGEN, y);
+      doc.setFont("helvetica", "normal"); doc.setTextColor(28, 28, 28);
+      doc.text(lineasPorCampo[i], MARGEN + ANCHO_ETIQUETA, y);
+      y += lineasPorCampo[i].length * 5.2;
+    });
+
+    // Fotos lado a lado, ajustadas a su proporción
+    if(fotos.length){
+      y += 3;
+      for(let i = 0; i < fotos.length; i++){
+        const [nombre, original] = fotos[i];
+        const foto = esHistorial ? await comprimirImagen(original, 600, 0.6) : original;
+        const { w, h } = await medirImagen(foto);
+        const escala = Math.min(CAJA_FOTO.w / w, (CAJA_FOTO.h - 6) / h);
+        const fw = w * escala, fh = h * escala;
+        const x = MARGEN + i * (CAJA_FOTO.w + 10);
+        doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(107, 107, 107);
+        doc.text("Foto " + nombre.toLowerCase(), x, y + 3);
+        doc.addImage(foto, "JPEG", x, y + 5, fw, fh);
+      }
+      y += CAJA_FOTO.h + 5;
+    }
+
+    // Separador entre registros
+    y += 3;
+    doc.setDrawColor(237, 237, 237);
+    doc.line(MARGEN, y, ANCHO - MARGEN, y);
+    y += 8;
+  }
+
+  const blob = doc.output("blob");
+  return new File([blob], nombreArchivo, { type: "application/pdf" });
+}
+
+function descargarArchivoDirecto(archivo){
+  const url = URL.createObjectURL(archivo);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = archivo.name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Botón "Compartir" de la pantalla de éxito: el archivo ya está listo
+let intentoCompartir = 1;
+async function compartirActual(){
+  if(!registroActual) return;
+  if(!archivoActual){
+    archivoActual = await prepararArchivoParaCompartir([registroActual], nombreBaseRegistro(registroActual), false);
+  }
+  const resultado = await compartirArchivo(archivoActual, construirResumenTexto(registroActual), null, intentoCompartir);
+  if(resultado === "bloqueado"){
+    intentoCompartir++;
+    alert("No se abrió el menú. Toca \"Compartir\" otra vez para intentarlo de otra forma.");
+  } else {
+    intentoCompartir = 1;
+  }
+}
+
+// Historial: arma el archivo y lo comparte; si el navegador pide otro toque,
+// el botón queda en verde y el segundo toque lo envía al instante.
+const intentosHistorial = {};
+async function compartirDesdeHistorial(id, boton){
+  const registro = leerHistorial().find(r => r.id === id);
+  if(!registro) return;
+
+  if(!archivosPreparados[id]){
+    boton.textContent = "⏳ Preparando...";
+    boton.classList.add("ocupado");
+    try{
+      archivosPreparados[id] = await prepararArchivoParaCompartir([registro], nombreBaseRegistro(registro), false);
+    } finally {
+      boton.classList.remove("ocupado");
+    }
+  }
+
+  intentosHistorial[id] = intentosHistorial[id] || 1;
+  const resultado = await compartirArchivo(archivosPreparados[id], construirResumenTexto(registro), null, intentosHistorial[id]);
+  if(resultado === "bloqueado") intentosHistorial[id]++; else delete intentosHistorial[id];
+  if(resultado === "bloqueado"){
+    boton.textContent = "📤 Toca para enviar";
+    boton.classList.add("listo");
+  } else {
+    boton.textContent = "📤 Compartir";
+    boton.classList.remove("listo");
+  }
+}
+
+function actualizarBotonExportar(){
+  const boton = document.getElementById("btnExportar");
+  boton.classList.toggle("listo", !!archivoHistorialPreparado);
+  boton.textContent = archivoHistorialPreparado ? "📤 Toca para enviar el historial" : "📊 Enviar historial completo";
+}
+
+let intentoExportar = 1;
+async function exportarHistorial(){
+  const lista = leerHistorial();
+  if(lista.length === 0){
+    alert("Todavía no hay registros guardados en este dispositivo.");
+    return;
+  }
+  const boton = document.getElementById("btnExportar");
+
+  if(!archivoHistorialPreparado){
+    boton.disabled = true;
+    boton.textContent = "⏳ Preparando historial...";
+    try{
+      archivoHistorialPreparado = await prepararArchivoParaCompartir(
+        lista, `historial_control_personal_${new Date().toISOString().slice(0,10)}`, true
+      );
+    } finally {
+      boton.disabled = false;
+    }
+  }
+
+  const resultado = await compartirArchivo(archivoHistorialPreparado, "", "Historial Control de Personal", intentoExportar);
+  if(resultado === "bloqueado"){ intentoExportar++; } else { intentoExportar = 1; archivoHistorialPreparado = null; }
+  actualizarBotonExportar();
+}
+
+function reiniciarFormulario(){
+  document.getElementById("pantallaExito").classList.add("oculto");
+  document.getElementById("vistaFormulario").classList.remove("oculto");
+  archivoActual = null;
+  registroActual = null;
+  intentoCompartir = 1;
+  mostrarDiagnostico("");
+  document.getElementById("nombre").value = "";
+  document.getElementById("sede").value = "";
+  document.getElementById("sedeHeader").textContent = "Selecciona tu sede";
+  document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+  document.getElementById("observacion").value = "";
+  document.getElementById("novedades").value = "";
+  fotoUniformeBase64 = null;
+  fotoBotasBase64 = null;
+  ["tarjetaHora","bloqueIngreso","bloqueFotos","bloqueNovedades","btnEnviar"].forEach(id =>
+    document.getElementById(id).classList.add("oculto")
+  );
+  document.getElementById("btnEnviar").disabled = true;
+  document.getElementById("btnEnviar").textContent = "Guardar registro";
+  // Restaurar cajas de foto
+  document.getElementById("cajaUniforme").outerHTML = `
+    <div class="foto-caja" id="cajaUniforme">
+      <div class="boton-camara" onclick="document.getElementById('inputUniforme').click()">📷 Tomar foto del uniforme</div>
+      <input type="file" id="inputUniforme" accept="image/*" capture="environment">
+    </div>`;
+  document.getElementById("cajaBotas").outerHTML = `
+    <div class="foto-caja" id="cajaBotas">
+      <div class="boton-camara" onclick="document.getElementById('inputBotas').click()">📷 Tomar foto de las botas</div>
+      <input type="file" id="inputBotas" accept="image/*" capture="environment">
+    </div>`;
+  document.getElementById("estadoUniforme").textContent = "Sin foto";
+  document.getElementById("estadoUniforme").classList.remove("ok");
+  document.getElementById("estadoBotas").textContent = "Sin foto";
+  document.getElementById("estadoBotas").classList.remove("ok");
+  manejarFoto("inputUniforme", "cajaUniforme", "estadoUniforme", "uniforme");
+  manejarFoto("inputBotas", "cajaBotas", "estadoBotas", "botas");
+}
+
+/* =====================================================================
+   INTEGRACIÓN CON SHAREPOINT (actualmente NO se usa)
+   Este bloque queda guardado para cuando un administrador active
+   "Custom Script" en el sitio SIA ONLINE. Mientras tanto, el registro
+   se guarda localmente (ver HISTORIAL LOCAL arriba) y no se llama a
+   estas funciones desde enviarRegistro().
+   ===================================================================== */
+async function obtenerDigest(){
+  const resp = await fetch(`${CONFIG.sitio}/_api/contextinfo`, {
+    method: "POST",
+    headers: { "Accept": "application/json;odata=verbose" },
+    credentials: "same-origin"
+  });
+  const data = await resp.json();
+  return data.d.GetContextWebInformation.FormDigestValue;
+}
+
+async function guardarEnSharePoint(registro){
+  const digest = await obtenerDigest();
+
+  // 1) Crear el ítem en la lista
+  const cuerpo = {
+    __metadata: { type: "SP.Data.Control_x0020_Personal_x0020_Yopal_x0020__x0020_WebListItem" },
+    Sede: registro.sede,
+    Tipo_de_registro: registro.tipo,
+    Uniforme_completo: registro.uniforme,
+    EPP_completo: registro.epp,
+    Observacion: registro.observacion,
+    Novedades_del_dia: registro.novedades,
+    Persona_que_registra: registro.persona
+  };
+
+  const respCrear = await fetch(`${CONFIG.sitio}/_api/web/lists/getbytitle('${CONFIG.lista}')/items`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Accept": "application/json;odata=verbose",
+      "Content-Type": "application/json;odata=verbose",
+      "X-RequestDigest": digest
+    },
+    body: JSON.stringify(cuerpo)
+  });
+  if(!respCrear.ok) throw new Error("No se pudo crear el registro en la lista.");
+  const itemCreado = await respCrear.json();
+  const idItem = itemCreado.d.Id;
+
+  // 2) Adjuntar las fotos (si aplica)
+  if(registro.fotoUniforme){
+    await adjuntarFoto(idItem, "uniforme.jpg", registro.fotoUniforme, digest);
+  }
+  if(registro.fotoBotas){
+    await adjuntarFoto(idItem, "botas.jpg", registro.fotoBotas, digest);
+  }
+}
+
+async function adjuntarFoto(idItem, nombreArchivo, base64, digest){
+  const binario = base64DataUrlABinario(base64);
+  const url = `${CONFIG.sitio}/_api/web/lists/getbytitle('${CONFIG.lista}')/items(${idItem})/AttachmentFiles/add(FileName='${nombreArchivo}')`;
+  const resp = await fetch(url, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Accept": "application/json;odata=verbose",
+      "X-RequestDigest": digest
+    },
+    body: binario
+  });
+  if(!resp.ok) throw new Error(`No se pudo adjuntar ${nombreArchivo}.`);
+}
+
+function base64DataUrlABinario(dataUrl){
+  const base64 = dataUrl.split(",")[1];
+  const binStr = atob(base64);
+  const bytes = new Uint8Array(binStr.length);
+  for(let i=0; i<binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+  return bytes.buffer;
+}
+</script>
+
+</body>
+</html>
